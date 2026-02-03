@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # AI Agent Fullstack Project
 
 A complete Next.js fullstack application that connects to Google (Gmail, Drive) and Shopify APIs through an AI-powered chat interface.
@@ -245,3 +246,6 @@ MIT
 ## Support
 
 For issues and questions, please open an issue on GitHub.
+=======
+# Almyti-app-integrations-test-
+>>>>>>> bdaf022d76d88997380f1bfd54a3697ae450f845
