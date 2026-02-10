@@ -42,7 +42,7 @@ import {
 import { searchVideos, getChannelStats } from '../google/youtube';
 import { createForm, getFormResponses } from '../google/forms';
 import { createSpreadsheet, readSheet, updateSheet } from '../google/sheets';
-import { listKeepNotes, createKeepNote } from '../google/keep';
+//import { listKeepNotes, createKeepNote } from '../google/keep';
 import { 
   listCourses, 
   listAssignments, 
@@ -645,21 +645,21 @@ if (intent.action === 'create_excel_sheet') {
       return { action: 'clear_doc', message: `✅ Cleared content of "${fileParams.name}".` };
     }
 
-    /* ================= GOOGLE KEEP (NOTES) ================= */
-    if (intent.action === 'fetch_notes') {
-      try {
-        const notes = await listKeepNotes(intent.parameters?.limit ?? 10);
-        return { action: 'fetch_notes', message: `✅ Found ${notes.length} notes.`, data: notes };
-      } catch { return { action: 'fetch_notes', message: '❌ Failed to fetch notes.' }; }
-    }
+    // /* ================= GOOGLE KEEP (NOTES) ================= */
+    // if (intent.action === 'fetch_notes') {
+    //   try {
+    //     const notes = await listKeepNotes(intent.parameters?.limit ?? 10);
+    //     return { action: 'fetch_notes', message: `✅ Found ${notes.length} notes.`, data: notes };
+    //   } catch { return { action: 'fetch_notes', message: '❌ Failed to fetch notes.' }; }
+    // }
 
-    if (intent.action === 'create_note') {
-      const { title, content } = intent.parameters ?? {};
-      try {
-        const note = await createKeepNote(title || 'New Note', content || 'No content');
-        return { action: 'create_note', message: `✅ Created note: "${note.title}"`, data: [note] };
-      } catch { return { action: 'create_note', message: '❌ Failed to create note.' }; }
-    }
+    // if (intent.action === 'create_note') {
+    //   const { title, content } = intent.parameters ?? {};
+    //   try {
+    //     const note = await createKeepNote(title || 'New Note', content || 'No content');
+    //     return { action: 'create_note', message: `✅ Created note: "${note.title}"`, data: [note] };
+    //   } catch { return { action: 'create_note', message: '❌ Failed to create note.' }; }
+    // }
 
     /* ================= GOOGLE CLASSROOM ================= */
     // 1. Fetch Courses
