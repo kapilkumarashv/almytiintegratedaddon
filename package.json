@@ -11,6 +11,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.9.1",
     "@azure/msal-node": "^2.16.3",
+    "@googleworkspace/meet-addons": "^1.2.0",
     "@microsoft/microsoft-graph-client": "^3.0.7",
     "@shopify/shopify-api": "^9.0.0",
     "@slack/bolt": "^4.6.0",

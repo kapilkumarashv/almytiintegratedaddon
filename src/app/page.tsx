@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import { useState, useEffect } from 'react';
 import ChatBox from '@/components/ChatBox';
@@ -6,27 +6,54 @@ import ConnectorCard from '@/components/ConnectorCard';
 import styles from './page.module.css';
 import { GoogleTokens, ShopifyCredentials, MicrosoftTokens } from '@/lib/types';
 
+// ✅ 1. IMPORT MEET SDK
+import { meet } from "@googleworkspace/meet-addons/meet.addons";
+
+// ✅ 2. DEFINE SESSION TYPE
+type AddonSession = Awaited<ReturnType<typeof meet.addon.createAddonSession>>;
+
 export default function Home() {
+  // --- Existing State ---
   const [googleTokens, setGoogleTokens] = useState<GoogleTokens | null>(null);
   const [shopifyConfig, setShopifyConfig] = useState<ShopifyCredentials | null>(null);
   const [microsoftTokens, setMicrosoftTokens] = useState<MicrosoftTokens | null>(null);
   const [telegramToken, setTelegramToken] = useState<string | null>(null);
-  
-  // ✅ NEW: Discord State (SaaS Mode)
   const [discordGuildId, setDiscordGuildId] = useState<string | null>(null);
-
   const [loading, setLoading] = useState(false);
   const [notification, setNotification] = useState<string>('');
 
+  // ✅ 3. NEW MEET STATE
+  const [meetSession, setMeetSession] = useState<AddonSession | null>(null);
+  const [meetStatus, setMeetStatus] = useState("Initializing...");
+
+  // ✅ 4. MEET HANDSHAKE (The Key logic)
+  useEffect(() => {
+    async function initMeet() {
+      try {
+        const newSession = await meet.addon.createAddonSession({
+          cloudProjectNumber: "897893086910", // Your Project Number
+        });
+        
+        // This tells Google Meet "I have loaded successfully"
+        await newSession.createSidePanelClient();
+
+        setMeetSession(newSession);
+        setMeetStatus("Meet Connected ✅");
+      } catch (error: unknown) {
+        console.error("Meet Add-on Error:", error);
+        setMeetStatus("Meet Error ❌");
+      }
+    }
+    initMeet();
+  }, []);
+
+  // --- Existing Auth Logic ---
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const googleTokensParam = urlParams.get('google_tokens');
     const microsoftTokensParam = urlParams.get('microsoft_tokens');
-    
-    // ✅ NEW: Capture Discord Success from Callback
     const discordSuccess = urlParams.get('discord_success');
     const guildId = urlParams.get('guild_id');
-    
     const error = urlParams.get('error');
 
     if (googleTokensParam) {
@@ -45,7 +72,6 @@ export default function Home() {
       } catch (err) { console.error(err); }
     }
 
-    // ✅ NEW: Handle Discord Success
     if (discordSuccess === 'true' && guildId) {
       setDiscordGuildId(guildId);
       showNotification('Discord Server linked successfully!');
@@ -55,7 +81,6 @@ export default function Home() {
       showNotification('Authentication failed');
     }
 
-    // Clean URL to keep it pretty
     if (googleTokensParam || microsoftTokensParam || discordSuccess || error) {
       window.history.replaceState({}, '', '/');
     }
@@ -92,10 +117,8 @@ export default function Home() {
     }
   };
 
-  // ✅ NEW: Discord Connection Handler
   const handleDiscordConnect = () => {
     setLoading(true);
-    // This calls your /api/discord/connect.ts file
     window.location.href = '/api/discord/connect';
   };
 
@@ -135,6 +158,11 @@ export default function Home() {
       <header className={styles.header}>
         <h1 className={styles.title}>🤖 AI Agent Dashboard</h1>
         <p className={styles.subtitle}>Connect your services and let AI help you</p>
+        
+        {/* ✅ SMALL MEET STATUS INDICATOR */}
+        <div style={{ fontSize: '0.75rem', marginTop: '5px', opacity: 0.7 }}>
+             Status: {meetStatus}
+        </div>
       </header>
 
       <div className={styles.content}>
@@ -158,7 +186,6 @@ export default function Home() {
               onConnect={handleMicrosoftConnect}
             />
 
-            {/* ✅ NEW: Discord SaaS Connector */}
             <ConnectorCard
               title="Discord"
               description="Connect your server to manage members & chat"
@@ -198,7 +225,7 @@ export default function Home() {
             shopifyConfig={shopifyConfig}
             microsoftTokens={microsoftTokens}
             telegramToken={telegramToken}
-            userGuildId={discordGuildId} // ✅ Pass the Server ID to the ChatBox
+            userGuildId={discordGuildId}
           />
         </main>
       </div>
