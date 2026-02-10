@@ -51,15 +51,32 @@ MICROSOFT FILES RULES (ONEDRIVE, WORD, EXCEL):
 
 TELEGRAM BOT RULES:
 - fetch_telegram_updates: User asks to check, read, or get new Telegram messages/updates.
+  - Extract "chatName" if the user mentions a specific group name (e.g. "from Testing group").
 - send_telegram_message: User asks to send a message via Telegram.
   - Extract "chatId" ONLY if a number (e.g., -100123) or @username is provided.
   - Extract "chatName" if the user provides a natural name like "Testing" or "Family Group".
   - Extract "text" (the message content).
 - manage_telegram_group: User asks to perform admin actions (kick, pin, promote, set title).
-  - Extract "chatId".
+  - Extract "chatId" or "chatName".
   - Extract "action" (kick, pin, promote, title).
   - Extract "userId" (if kicking/promoting) or "messageId" (if pinning).
   - If action is "title", extract the new title text into "value".
+
+SLACK RULES:
+- fetch_slack_history: User asks to read, check, or summarize Slack messages.
+  - Extract "channelName" (e.g., "general", "marketing").
+  - If no channel is specified, default to "general".
+- send_slack_message: User asks to post or send a message to Slack.
+  - Extract "channelName" and "text".
+
+DISCORD RULES:
+- fetch_discord_messages: User asks to read/check Discord.
+  - Do NOT ask for channelId.
+- send_discord_message: User asks to send a message to Discord.
+  - Extract "text".
+  - Do NOT ask for channelId.
+- kick_discord_user: User asks to kick someone.
+  - Extract "userId".
 
 YOUTUBE RULES:
 - search_youtube: User asks to find, search, or look for videos. Extract "query".
@@ -111,14 +128,6 @@ GOOGLE MEET RULES:
 - Do NOT invent participants, meeting link, or description.
 - If action is delete_meet or update_meet and no date/time is given, rely on context (last created meeting).
 
-DISCORD RULES:
-- fetch_discord_messages: User asks to read, check, or see messages from a Discord channel.
-  - Extract "channelId".
-- send_discord_message: User asks to send a message to Discord.
-  - Extract "channelId" and "text" (the message content).
-- kick_discord_user: User asks to kick or remove someone from a Discord server.
-  - Extract "userId" of the person to be kicked.
-  - Extract "guildId" (Server ID) ONLY if explicitly provided as a long number.
 GOOGLE SHEETS RULES:
 - create_sheet: only if user explicitly asks to create a spreadsheet.
 - read_sheet: only if user asks to read/view sheet data. Extract "title" (filename) or "spreadsheetId".
@@ -174,6 +183,8 @@ Available actions:
 - fetch_discord_messages
 - send_discord_message
 - kick_discord_user
+- fetch_slack_history
+- send_slack_message
 - help
 - none
 
@@ -194,6 +205,8 @@ RESPONSE FORMAT (JSON ONLY):
            | "create_doc" | "read_doc" | "append_doc" | "replace_doc" | "clear_doc"
            | "fetch_notes" | "create_note"
            | "fetch_courses" | "create_course" | "fetch_assignments" | "fetch_students"
+           | "fetch_discord_messages" | "send_discord_message" | "kick_discord_user"
+           | "fetch_slack_history" | "send_slack_message"
            | "help" | "none",
   "usesContext": boolean,
   "parameters": {
@@ -214,6 +227,9 @@ RESPONSE FORMAT (JSON ONLY):
     "messageId": "Telegram message ID",
     "value": "The new title for the group",
     
+    // Slack
+    "channelName": "Name of Slack channel (e.g. general)",
+
     // YouTube
     "query": "video search query",
     "channelName": "name of youtube channel",
@@ -312,6 +328,22 @@ function fallbackParsing(query: string): AIIntent {
     q.includes('that link') ||
     q.includes('previous meeting') ||
     q.includes('the meeting');
+
+  /* -------------------- SLACK FALLBACKS -------------------- */
+  if (q.includes('slack')) {
+    if (q.includes('send') || q.includes('post') || q.includes('message') || q.includes('say')) {
+      return {
+        action: 'send_slack_message',
+        parameters: {},
+        naturalResponse: 'I can send that to Slack. Which channel?'
+      };
+    }
+    return {
+      action: 'fetch_slack_history',
+      parameters: { limit: 10 },
+      naturalResponse: 'Checking Slack messages...'
+    };
+  }
 
   /* -------------------- TELEGRAM FALLBACKS -------------------- */
   if (q.includes('telegram')) {
@@ -642,7 +674,7 @@ function fallbackParsing(query: string): AIIntent {
     action: 'help',
     usesContext: false,
     parameters: {},
-    naturalResponse: 'I can help with Gmail, Drive, Classroom, Shopify, Google Meet, Sheets, Docs, Keep, Teams, Telegram, YouTube and Forms.',
+    naturalResponse: 'I can help with Gmail, Drive, Classroom, Shopify, Google Meet, Sheets, Docs, Keep, Teams, Telegram, Slack, YouTube and Forms.',
   };
 }
 
@@ -673,6 +705,7 @@ async function generateSummary(
     | 'created_form'
     | 'telegram_messages'
     | 'discord_messages'
+    | 'slack_messages' // ✅ Added Slack Messages
 ): Promise<string> {
   try {
     let dataLabel: string = dataType;
@@ -689,11 +722,11 @@ async function generateSummary(
     if (dataType === 'excel_sheet') dataLabel = 'Excel Data';
     if (dataType === 'telegram_messages') dataLabel = 'Telegram Messages';
     if (dataType === 'discord_messages') dataLabel = 'Discord Channel Messages';
-    // ✅ NEW LABELS
     if (dataType === 'youtube_videos') dataLabel = 'YouTube Search Results';
     if (dataType === 'youtube_stats') dataLabel = 'YouTube Channel Statistics';
     if (dataType === 'form_responses') dataLabel = 'Google Form Responses';
     if (dataType === 'created_form') dataLabel = 'Created Google Form';
+    if (dataType === 'slack_messages') dataLabel = 'Slack Channel Messages'; // ✅ Label
 
     const preview = JSON.stringify(data.slice(0, 3), null, 2);
     const completion = await openai.chat.completions.create({

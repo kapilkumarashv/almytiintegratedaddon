@@ -30,7 +30,19 @@ export interface Message {
     | YouTubeChannel[]
     | GoogleForm[]
     | FormResponse[]
+    | DiscordMessage[] // ✅ Discord Data
+    | SlackMessage[]   // ✅ Slack Data
     | any; 
+}
+
+/* ===================================================== */
+/* ===================== SLACK ======================== */
+/* ===================================================== */
+
+export interface SlackMessage {
+  user: string;
+  text: string;
+  ts: string;
 }
 
 /* ===================================================== */
@@ -418,7 +430,7 @@ export type ShopifyCredentials = ShopifyConfig;
 export interface FetchOrderParams {
   limit?: number;
   status?: string;
-  filter?: string; // ✅ ADD THIS LINE to fix the "filter" error
+  filter?: string;
   created_at_min?: string;
   created_at_max?: string;
 }
@@ -456,8 +468,8 @@ export interface TelegramUpdate {
 }
 
 export interface SendTelegramParams {
-  chatId?: string; // Can be ID or @username
-  chatName?: string; // Name based lookup
+  chatId?: string;
+  chatName?: string;
   text?: string;
   replyToMessageId?: number;
 }
@@ -475,6 +487,26 @@ export interface TelegramConfig {
 }
 
 /* ===================================================== */
+/* ===================== DISCORD (SaaS) ===================== */
+/* ===================================================== */
+
+export interface DiscordMessage {
+  id: string;
+  author: string;
+  content: string;
+  timestamp: Date;
+  isBot: boolean;
+}
+
+export interface DiscordParams {
+  channelId?: string;
+  guildId?: string; 
+  text?: string;
+  limit?: number;
+  userId?: string;  
+}
+
+/* ===================================================== */
 /* ===================== CONNECTION STATUS =========== */
 /* ===================================================== */
 
@@ -483,15 +515,10 @@ export interface ServiceConnection {
   shopify: boolean;
   microsoft: boolean;
   telegram: boolean;
-  discord: boolean; // ✅ Add this
+  discord: boolean;
+  slack: boolean; // ✅ Added Slack Status
 }
 
-// Inside export interface AgentResponse { ... }
-// Add these to the 'action' union:
-// | 'fetch_discord_messages' | 'send_discord_message' | 'kick_discord_user'
-
-// Add this to the 'data' union:
-// | DiscordMessage[]
 /* ===================================================== */
 /* ===================== AUTH ========================= */
 /* ===================================================== */
@@ -523,23 +550,7 @@ export interface SendEmailParams {
   subject?: string;
   body?: string;
 }
-/* ===================== DISCORD (SaaS) ===================== */
 
-export interface DiscordMessage {
-  id: string;
-  author: string;
-  content: string;
-  timestamp: Date;
-  isBot: boolean;
-}
-
-export interface DiscordParams {
-  channelId?: string;
-  guildId?: string; // Stored Server ID from OAuth
-  text?: string;
-  limit?: number;
-  userId?: string;  // For moderation actions like kick/ban
-}
 /* ===================================================== */
 /* ===================== BASE INTENT ================== */
 /* ===================================================== */
@@ -687,7 +698,7 @@ export type AIIntent =
   // TELEGRAM INTENTS
   | (BaseIntent & {
       action: 'fetch_telegram_updates';
-      parameters: { limit?: number };
+      parameters: { limit?: number; chatName?: string; filter?: string }; // Updated params
       naturalResponse: string;
     })
   | (BaseIntent & {
@@ -722,29 +733,43 @@ export type AIIntent =
       parameters: { formId?: string; title?: string };
       naturalResponse: string;
     })
-  // DEFAULT
-  | (BaseIntent & {
-      action: 'help' | 'none';
-      parameters: {};
-      naturalResponse: string;
-    })
-    // DISCORD ACTIONS
+  // DISCORD ACTIONS
   | (BaseIntent & {
       action: 'fetch_discord_messages';
-      parameters: { channelId?: string; limit?: number };
+      parameters: { channelId?: string; guildId?: string; limit?: number }; 
       naturalResponse: string;
     })
   | (BaseIntent & {
       action: 'send_discord_message';
-      parameters: { channelId?: string; text?: string };
+      parameters: { channelId?: string; guildId?: string; text?: string };
       naturalResponse: string;
     })
   | (BaseIntent & {
       action: 'kick_discord_user';
       parameters: { guildId?: string; userId?: string };
       naturalResponse: string;
+    })
+  // ✅ SLACK ACTIONS (NEW)
+  | (BaseIntent & {
+      action: 'fetch_slack_history';
+      parameters: { channelName?: string; limit?: number };
+      naturalResponse: string;
+    })
+  | (BaseIntent & {
+      action: 'send_slack_message';
+      parameters: { channelName?: string; text?: string };
+      naturalResponse: string;
+    })
+  // DEFAULT
+  | (BaseIntent & {
+      action: 'help' | 'none';
+      parameters: {};
+      naturalResponse: string;
     });
 
+/* ===================================================== */
+/* ===================== AGENT RESPONSE =============== */
+/* ===================================================== */
 /* ===================================================== */
 /* ===================== AGENT RESPONSE =============== */
 /* ===================================================== */
@@ -791,13 +816,18 @@ export interface AgentResponse {
     | 'get_channel_stats'
     | 'create_form'
     | 'fetch_form_responses'
-    | 'fetch_discord_messages' // ✅ ADD THIS
-    | 'send_discord_message'    // ✅ ADD THIS
-    | 'kick_discord_user'      // ✅ ADD THIS
+    | 'fetch_discord_messages'
+    | 'send_discord_message'
+    | 'kick_discord_user'
+    | 'fetch_slack_history'
+    | 'send_slack_message'
     | 'help'
     | 'none';
 
   message: string;
+  
+  // ✅ ADD THIS: Allows the API to read back parameters (like page limits, dates, etc.)
+  parameters?: any; 
 
   data?:
     | GmailEmail[]
@@ -822,5 +852,7 @@ export interface AgentResponse {
     | YouTubeChannel[]
     | GoogleForm[]
     | FormResponse[]
+    | DiscordMessage[]
+    | SlackMessage[]
     | any;
 }

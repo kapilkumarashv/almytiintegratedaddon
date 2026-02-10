@@ -63,7 +63,7 @@ import { getOutlookEmails, sendOutlookEmail, createOutlookEvent } from '../micro
 import { listOneDriveFiles, findOneDriveFileByName } from '../microsoft/onedrive';
 import { createWordDoc, readWordDoc } from '../microsoft/word';
 import { createExcelWorkbook, readExcelWorksheet, appendExcelRow } from '../microsoft/excel';
-
+import { getSlackHistory, sendSlackMessage } from '../slack/client';
 import fs from 'fs';
 import path from 'path';
 
@@ -533,7 +533,46 @@ if (intent.action === 'create_excel_sheet') {
       await appendExcelRow(msToken, fileInfo.id, values[0]); 
       return { action: 'update_excel_sheet', message: `✅ Added row to "${fileInfo.name}".` };
     }
+/* ============================================================================
+       ✅ SLACK INTEGRATION
+       ============================================================================ */
 
+    // 1. Read Slack History
+    if (intent.action === 'fetch_slack_history') {
+      const targetChannel = intent.parameters?.channelName || 'general';
+
+      try {
+        const history = await getSlackHistory(targetChannel, intent.parameters?.limit || 5);
+
+        if (history.length === 0) {
+          return { action: 'fetch_slack_history', message: `📭 No messages found in #${targetChannel}.` };
+        }
+
+        const summary = history.map(m => `• ${m.text}`).join('\n');
+        return {
+          action: 'fetch_slack_history',
+          message: `✅ **Recent Slack Messages in #${targetChannel}:**\n\n${summary}`,
+          data: history
+        };
+      } catch (e: any) {
+        return { action: 'fetch_slack_history', message: `❌ Slack Error: ${e.message}` };
+      }
+    }
+
+    // 2. Send Slack Message
+    if (intent.action === 'send_slack_message') {
+      const targetChannel = intent.parameters?.channelName || 'general';
+      const { text } = intent.parameters || {};
+
+      if (!text) return { action: 'send_slack_message', message: 'What should I say on Slack?' };
+
+      try {
+        await sendSlackMessage(targetChannel, text);
+        return { action: 'send_slack_message', message: `🚀 Message sent to Slack channel **#${targetChannel}**.` };
+      } catch (e: any) {
+        return { action: 'send_slack_message', message: `❌ Failed to send to Slack: ${e.message}` };
+      }
+    }
     /* ============================================================================
        EXISTING GOOGLE LOGIC (UNCHANGED)
        ============================================================================ */
@@ -884,12 +923,13 @@ if (intent.action === 'create_excel_sheet') {
         data: sheet,
       };
     }
-    /* ============================================================================
-       ✅ DISCORD SAAS LOGIC
+  /* ============================================================================
+       ✅ DISCORD SAAS LOGIC (Auto-Channel Version)
        ============================================================================ */
     
     // 1. Initialize Discord if any Discord action is requested
     if (intent.action.includes('discord')) {
+       // Use the token passed from UI, or fallback to env
        const token = discordToken || process.env.DISCORD_TOKEN;
        if (!token) return { action: 'none', message: '❌ Discord Bot Token is not configured.' };
        await initDiscord(token);
@@ -897,19 +937,32 @@ if (intent.action === 'create_excel_sheet') {
 
     // 2. Read Messages
     if (intent.action === 'fetch_discord_messages') {
-      // Priority: 1. ID mentioned in chat, 2. User's connected Guild ID
-      const channelId = intent.parameters?.channelId;
-      if (!channelId) return { action: 'fetch_discord_messages', message: 'I need a Discord Channel ID to read messages.' };
+      // ✅ Use the Connected Server ID (from Database/UI) or allow user to override
+      const targetGuildId = intent.parameters?.guildId || userGuildId;
+
+      if (!targetGuildId) {
+        return { action: 'fetch_discord_messages', message: '❌ Please connect a Discord server first.' };
+      }
 
       try {
-        const msgs = await getDiscordMessages(channelId, intent.parameters?.limit || 10);
-        const summary = msgs.map(m => `[${m.author}]: ${m.content}`).join('\n');
+        // ✅ Call the new function (it finds #general automatically)
+        const msgs = await getDiscordMessages(targetGuildId, intent.parameters?.limit || 5);
+        
+        if (msgs.length === 0) {
+           return { action: 'fetch_discord_messages', message: '📭 The channel is empty.' };
+        }
+
+        // ✅ FORMAT THE OUTPUT (Fixes "not displaying" issue)
+        const summary = msgs.map(m => 
+          `**${m.author}**: "${m.content}"`
+        ).join('\n');
         
         return { 
           action: 'fetch_discord_messages', 
-          message: `✅ Read ${msgs.length} messages from channel ${channelId}:\n\n${summary}`,
+          message: `✅ **Latest Discord Activity:**\n\n${summary}`,
           data: msgs
         };
+
       } catch (e: any) {
         return { action: 'fetch_discord_messages', message: `❌ Discord Error: ${e.message}` };
       }
@@ -917,18 +970,24 @@ if (intent.action === 'create_excel_sheet') {
 
     // 3. Send Message
     if (intent.action === 'send_discord_message') {
-      const { channelId, text } = intent.parameters || {};
-      if (!channelId || !text) return { action: 'send_discord_message', message: 'Please provide a Channel ID and message text.' };
+      const { text } = intent.parameters || {};
+      const targetGuildId = intent.parameters?.guildId || userGuildId;
 
-      await sendDiscordMessage(channelId, text);
-      return { action: 'send_discord_message', message: `🚀 Message sent to Discord channel ${channelId}.` };
+      if (!targetGuildId) return { action: 'send_discord_message', message: '❌ Please connect a Discord server first.' };
+      if (!text) return { action: 'send_discord_message', message: 'What should I say?' };
+
+      try {
+        // ✅ Sends to #general automatically
+        const channelName = await sendDiscordMessage(targetGuildId, text);
+        return { action: 'send_discord_message', message: `🚀 Message sent to **#${channelName}**.` };
+      } catch (e: any) {
+         return { action: 'send_discord_message', message: `❌ Failed to send: ${e.message}` };
+      }
     }
 
     // 4. Moderation: Kick User
     if (intent.action === 'kick_discord_user') {
       const { userId } = intent.parameters || {};
-      
-      // ✅ AUTOMATIC RESOLUTION: Use the guildId passed from the database/session
       const targetGuildId = intent.parameters?.guildId || userGuildId;
 
       if (!targetGuildId) {

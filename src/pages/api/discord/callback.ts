@@ -63,7 +63,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // 4. Send the user back to your Dashboard
     // We pass success=true so you can show a "Connected!" notification
-    res.redirect(`/dashboard?discord_success=true&guild_id=${guild_id}`);
+   res.redirect(`/?discord_success=true&guild_id=${guild_id}`);
 
   } catch (err: any) {
     console.error("Discord Callback Error:", err.response?.data || err.message);

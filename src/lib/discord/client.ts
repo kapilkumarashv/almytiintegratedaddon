@@ -1,5 +1,4 @@
-// src/lib/discord/client.ts
-import { Client, GatewayIntentBits, Partials, TextChannel } from 'discord.js';
+import { Client, GatewayIntentBits, Partials, TextChannel, ChannelType } from 'discord.js';
 
 // 1. Initialize the internal Discord Client
 const client = new Client({
@@ -7,7 +6,7 @@ const client = new Client({
     GatewayIntentBits.Guilds,           // Required to see servers
     GatewayIntentBits.GuildMessages,    // Required to see messages
     GatewayIntentBits.MessageContent,   // Required to READ message text
-    GatewayIntentBits.GuildMembers,    // Required to KICK/BAN users
+    GatewayIntentBits.GuildMembers,     // Required to KICK/BAN users
   ],
   partials: [Partials.Channel, Partials.Message]
 });
@@ -37,15 +36,46 @@ export const initDiscord = async (token: string) => {
 };
 
 /**
- * Fetches recent messages from a specific channel
+ * ✅ NEW HELPER: Find the best channel to talk in
+ * Prioritizes: System Channel -> #general -> Any visible text channel
  */
-export async function getDiscordMessages(channelId: string, limit: number = 10) {
-  const channel = await client.channels.fetch(channelId);
-  if (!channel || !channel.isTextBased()) {
-    throw new Error("Channel not found or is not text-based.");
+async function getDefaultChannel(guildId: string): Promise<TextChannel> {
+  // Ensure the bot is ready before fetching
+  if (!client.isReady()) {
+      throw new Error("Discord client is not ready. Try again in a moment.");
   }
 
-  const messages = await (channel as TextChannel).messages.fetch({ limit });
+  const guild = await client.guilds.fetch(guildId);
+  if (!guild) throw new Error("Server not found. Please reconnect Discord.");
+
+  // 1. Try the "System Channel" (Default welcome channel)
+  if (guild.systemChannel && guild.systemChannel.isTextBased()) {
+    return guild.systemChannel as TextChannel;
+  }
+
+  // 2. Fallback: Find the first channel named "general"
+  const general = guild.channels.cache.find(
+    c => c.name === 'general' && c.type === ChannelType.GuildText
+  );
+  if (general) return general as TextChannel;
+
+  // 3. Fallback: Find ANY text channel the bot can see
+  const anyChannel = guild.channels.cache.find(
+    c => c.type === ChannelType.GuildText && c.viewable
+  );
+  
+  if (!anyChannel) throw new Error("No text channels found in this server.");
+  return anyChannel as TextChannel;
+}
+
+/**
+ * ✅ UPDATED: Fetches recent messages from the default channel
+ * Now accepts 'guildId' instead of 'channelId'
+ */
+export async function getDiscordMessages(guildId: string, limit: number = 10) {
+  const channel = await getDefaultChannel(guildId);
+
+  const messages = await channel.messages.fetch({ limit });
   return messages.map(m => ({
     id: m.id,
     author: m.author.username,
@@ -56,15 +86,13 @@ export async function getDiscordMessages(channelId: string, limit: number = 10) 
 }
 
 /**
- * Sends a plain text message to a channel
+ * ✅ UPDATED: Sends a message to the default channel
+ * Now accepts 'guildId' instead of 'channelId'
  */
-export async function sendDiscordMessage(channelId: string, text: string) {
-  const channel = await client.channels.fetch(channelId);
-  if (channel && channel.isTextBased()) {
-    await (channel as TextChannel).send(text);
-    return true;
-  }
-  return false;
+export async function sendDiscordMessage(guildId: string, text: string) {
+  const channel = await getDefaultChannel(guildId);
+  await channel.send(text);
+  return channel.name; // Return channel name so we can tell the user where we sent it
 }
 
 /**

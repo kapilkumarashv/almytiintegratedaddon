@@ -5,9 +5,11 @@ import { getEmails } from '../../../lib/google/gmail';
 import { getLatestFiles } from '../../../lib/google/drive';
 import { getLatestOrders, testShopifyConnection, ShopifyConfig } from '../../../lib/shopify/api';
 import { getRecentTeamsMessages, getTeamsChannels } from '../../../lib/microsoft/teams';
+import { getSlackHistory } from '../../../lib/slack/client'; // ✅ Import Slack Client
 import { generateSummary } from '../../../lib/ai/client';
 import { ShopifyCredentials, MicrosoftTokens } from '../../../lib/types';
 
+/* ----------------- Extend AgentResponse ----------------- */
 /* ----------------- Extend AgentResponse ----------------- */
 export interface AIIntentParameters {
   limit?: number;
@@ -45,16 +47,20 @@ export interface AIIntentParameters {
   // Telegram Parameters
   chatId?: string;
   action?: string;
-  userId?: number;
+  userId?: string; 
   messageId?: number;
+  value?: string;
 
-  // ✅ YouTube Parameters
+  // YouTube & Slack Parameters
   query?: string;
   channelId?: string;
-  channelName?: string;
+  channelName?: string; // ✅ Shared by YouTube and Slack (Defined only ONCE)
 
-  // ✅ Forms Parameters
+  // Forms Parameters
   formId?: string;
+
+  // Discord & Guild Parameters
+  guildId?: string;
 }
 
 export interface AgentResponseExtended {
@@ -93,11 +99,18 @@ export interface AgentResponseExtended {
     | 'fetch_telegram_updates'
     | 'send_telegram_message'
     | 'manage_telegram_group'
-    // ✅ NEW ACTIONS
+    // NEW ACTIONS
     | 'search_youtube'
     | 'get_channel_stats'
     | 'create_form'
     | 'fetch_form_responses'
+    // DISCORD ACTIONS
+    | 'fetch_discord_messages'
+    | 'send_discord_message'
+    | 'kick_discord_user'
+    // ✅ SLACK ACTIONS
+    | 'fetch_slack_history'
+    | 'send_slack_message'
     | 'help'
     | 'none';
 
@@ -111,6 +124,7 @@ interface QueryRequestBody {
   shopifyConfig?: ShopifyCredentials;
   microsoftTokens?: MicrosoftTokens;
   telegramToken?: string;
+  userGuildId?: string; 
 }
 
 /* ----------------- API Handler ----------------- */
@@ -123,14 +137,27 @@ export default async function handler(
   }
 
   try {
-    const { query, shopifyConfig, microsoftTokens, telegramToken } = req.body as QueryRequestBody;
+    const { 
+      query, 
+      shopifyConfig, 
+      microsoftTokens, 
+      telegramToken, 
+      userGuildId 
+    } = req.body as QueryRequestBody;
 
     if (!query) {
       return res.status(400).json({ error: 'Missing query' });
     }
 
     // Determine AI intent & Execute Core Logic (Processor)
-    const response = (await processQuery(query, shopifyConfig, microsoftTokens, telegramToken)) as AgentResponseExtended;
+    const response = (await processQuery(
+      query, 
+      shopifyConfig, 
+      microsoftTokens, 
+      telegramToken,
+      undefined, // discordToken
+      userGuildId
+    )) as AgentResponseExtended;
 
     // Ensure parameters exist
     const params: AIIntentParameters = response.parameters || { limit: 5, search: '' };
@@ -138,8 +165,6 @@ export default async function handler(
     /* =================================================================================
        GOOGLE INTEGRATIONS
        ================================================================================= */
-
-    /* ----------------- FETCH EMAILS (GMAIL) ----------------- */
     if (response.action === 'fetch_emails') {
       try {
         if (!response.data) {
@@ -158,7 +183,6 @@ export default async function handler(
       }
     }
 
-    /* ----------------- FETCH FILES (DRIVE) ----------------- */
     if (response.action === 'fetch_files') {
       try {
         if (!response.data) {
@@ -174,7 +198,6 @@ export default async function handler(
       }
     }
 
-    /* ----------------- FETCH NOTES (KEEP) ----------------- */
     if (response.action === 'fetch_notes') {
       try {
         if (response.data && Array.isArray(response.data)) {
@@ -207,13 +230,10 @@ export default async function handler(
     if (response.action === 'fetch_form_responses') {
       try { if (response.data) response.message = await generateSummary(response.data, query, 'form_responses'); } catch (e) {}
     }
-    // Note: 'create_form' usually has a specific success message from processor, so we might skip summary unless we want AI to rephrase it.
 
     /* =================================================================================
        MICROSOFT INTEGRATIONS
        ================================================================================= */
-
-    /* ----------------- OUTLOOK MAIL ----------------- */
     if (response.action === 'fetch_outlook_emails') {
       try {
         if (response.data && Array.isArray(response.data)) {
@@ -223,7 +243,6 @@ export default async function handler(
       } catch (err) { console.error('Error summarizing Outlook emails:', err); }
     }
 
-    /* ----------------- ONEDRIVE FILES ----------------- */
     if (response.action === 'fetch_onedrive_files') {
       try {
         if (response.data && Array.isArray(response.data)) {
@@ -233,7 +252,6 @@ export default async function handler(
       } catch (err) { console.error('Error summarizing OneDrive files:', err); }
     }
 
-    /* ----------------- EXCEL ----------------- */
     if (response.action === 'read_excel_sheet') {
       try {
         if (response.data) {
@@ -243,7 +261,6 @@ export default async function handler(
       } catch (err) { console.error('Error summarizing Excel data:', err); }
     }
 
-    /* ----------------- TEAMS (Manual Fetch Fallback) ----------------- */
     if (response.action === 'fetch_teams_messages') {
       if (!microsoftTokens) {
         response.message = '❌ Please connect your Microsoft Teams account first.';
@@ -287,7 +304,7 @@ export default async function handler(
     }
 
     /* =================================================================================
-       ✅ TELEGRAM INTEGRATION (NEW)
+       TELEGRAM & DISCORD
        ================================================================================= */
     if (response.action === 'fetch_telegram_updates') {
       try {
@@ -296,6 +313,37 @@ export default async function handler(
           response.message = summary;
         }
       } catch (err) { console.error('Error summarizing Telegram messages:', err); }
+    }
+
+    if (response.action === 'fetch_discord_messages') {
+      try {
+        if (response.data && Array.isArray(response.data)) {
+          const summary = await generateSummary(response.data, query, 'discord_messages');
+          response.message = summary;
+        }
+      } catch (err) { console.error('Error summarizing Discord messages:', err); }
+    }
+
+    /* =================================================================================
+       ✅ SLACK INTEGRATION
+       ================================================================================= */
+    if (response.action === 'fetch_slack_history') {
+      try {
+        // If the processor didn't already fetch data (unlikely, but safe check)
+        if (!response.data) {
+           const history = await getSlackHistory(params.channelName || 'general', params.limit || 5);
+           response.data = history;
+        }
+
+        if (response.data && Array.isArray(response.data)) {
+          // ✅ AI Summary for Slack
+          const summary = await generateSummary(response.data, query, 'slack_messages');
+          response.message = summary;
+        }
+      } catch (err) { 
+        console.error('Error summarizing Slack messages:', err); 
+        response.message = '❌ Failed to summarize Slack messages. Check logs.';
+      }
     }
 
     /* =================================================================================
@@ -338,11 +386,6 @@ export default async function handler(
           response.message = '❌ Failed to fetch Shopify orders.';
         }
       }
-    }
-
-    /* ----------------- CREATE MEET ----------------- */
-    if (response.action === 'create_meet' || response.action === 'create_outlook_event') {
-      // Message is already set by processor
     }
 
     /* ----------------- DEFAULT / HELP ----------------- */
