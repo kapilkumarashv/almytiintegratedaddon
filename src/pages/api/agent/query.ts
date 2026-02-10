@@ -327,24 +327,24 @@ export default async function handler(
     /* =================================================================================
        ✅ SLACK INTEGRATION
        ================================================================================= */
-    if (response.action === 'fetch_slack_history') {
-      try {
-        // If the processor didn't already fetch data (unlikely, but safe check)
-        if (!response.data) {
-           const history = await getSlackHistory(params.channelName || 'general', params.limit || 5);
-           response.data = history;
-        }
+    // if (response.action === 'fetch_slack_history') {
+    //   try {
+    //     // If the processor didn't already fetch data (unlikely, but safe check)
+    //     if (!response.data) {
+    //        const history = await getSlackHistory(params.channelName || 'general', params.limit || 5);
+    //        response.data = history;
+    //     }
 
-        if (response.data && Array.isArray(response.data)) {
-          // ✅ AI Summary for Slack
-          const summary = await generateSummary(response.data, query, 'slack_messages');
-          response.message = summary;
-        }
-      } catch (err) { 
-        console.error('Error summarizing Slack messages:', err); 
-        response.message = '❌ Failed to summarize Slack messages. Check logs.';
-      }
-    }
+    //     if (response.data && Array.isArray(response.data)) {
+    //       // ✅ AI Summary for Slack
+    //       const summary = await generateSummary(response.data, query, 'slack_messages');
+    //       response.message = summary;
+    //     }
+    //   } catch (err) { 
+    //     console.error('Error summarizing Slack messages:', err); 
+    //     response.message = '❌ Failed to summarize Slack messages. Check logs.';
+    //   }
+    // }
 
     /* =================================================================================
        SHOPIFY
