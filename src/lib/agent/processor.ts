@@ -533,46 +533,46 @@ if (intent.action === 'create_excel_sheet') {
       await appendExcelRow(msToken, fileInfo.id, values[0]); 
       return { action: 'update_excel_sheet', message: `✅ Added row to "${fileInfo.name}".` };
     }
-/* ============================================================================
-       ✅ SLACK INTEGRATION
-       ============================================================================ */
+// /* ============================================================================
+//        ✅ SLACK INTEGRATION
+//        ============================================================================ */
 
-    // 1. Read Slack History
-    if (intent.action === 'fetch_slack_history') {
-      const targetChannel = intent.parameters?.channelName || 'general';
+//     // 1. Read Slack History
+//     if (intent.action === 'fetch_slack_history') {
+//       const targetChannel = intent.parameters?.channelName || 'general';
 
-      try {
-        const history = await getSlackHistory(targetChannel, intent.parameters?.limit || 5);
+//       try {
+//         const history = await getSlackHistory(targetChannel, intent.parameters?.limit || 5);
 
-        if (history.length === 0) {
-          return { action: 'fetch_slack_history', message: `📭 No messages found in #${targetChannel}.` };
-        }
+//         if (history.length === 0) {
+//           return { action: 'fetch_slack_history', message: `📭 No messages found in #${targetChannel}.` };
+//         }
 
-        const summary = history.map(m => `• ${m.text}`).join('\n');
-        return {
-          action: 'fetch_slack_history',
-          message: `✅ **Recent Slack Messages in #${targetChannel}:**\n\n${summary}`,
-          data: history
-        };
-      } catch (e: any) {
-        return { action: 'fetch_slack_history', message: `❌ Slack Error: ${e.message}` };
-      }
-    }
+//         const summary = history.map(m => `• ${m.text}`).join('\n');
+//         return {
+//           action: 'fetch_slack_history',
+//           message: `✅ **Recent Slack Messages in #${targetChannel}:**\n\n${summary}`,
+//           data: history
+//         };
+//       } catch (e: any) {
+//         return { action: 'fetch_slack_history', message: `❌ Slack Error: ${e.message}` };
+//       }
+//     }
 
-    // 2. Send Slack Message
-    if (intent.action === 'send_slack_message') {
-      const targetChannel = intent.parameters?.channelName || 'general';
-      const { text } = intent.parameters || {};
+//     // 2. Send Slack Message
+//     if (intent.action === 'send_slack_message') {
+//       const targetChannel = intent.parameters?.channelName || 'general';
+//       const { text } = intent.parameters || {};
 
-      if (!text) return { action: 'send_slack_message', message: 'What should I say on Slack?' };
+//       if (!text) return { action: 'send_slack_message', message: 'What should I say on Slack?' };
 
-      try {
-        await sendSlackMessage(targetChannel, text);
-        return { action: 'send_slack_message', message: `🚀 Message sent to Slack channel **#${targetChannel}**.` };
-      } catch (e: any) {
-        return { action: 'send_slack_message', message: `❌ Failed to send to Slack: ${e.message}` };
-      }
-    }
+//       try {
+//         await sendSlackMessage(targetChannel, text);
+//         return { action: 'send_slack_message', message: `🚀 Message sent to Slack channel **#${targetChannel}**.` };
+//       } catch (e: any) {
+//         return { action: 'send_slack_message', message: `❌ Failed to send to Slack: ${e.message}` };
+//       }
+//     }
     /* ============================================================================
        EXISTING GOOGLE LOGIC (UNCHANGED)
        ============================================================================ */
@@ -854,55 +854,55 @@ if (intent.action === 'create_excel_sheet') {
     /* ============================================================================
        ✅ SHOPIFY INTEGRATION (Fixed for Flexible Tokens)
        ============================================================================ */
-    if (intent.action === 'fetch_orders') {
-      // 1. Try to get credentials from the Connected Integration (Database/Session)
-      // If you are storing them in .env, keep using process.env
-      // If you are letting the user "Connect" via UI, retrieve that config here.
+    // if (intent.action === 'fetch_orders') {
+    //   // 1. Try to get credentials from the Connected Integration (Database/Session)
+    //   // If you are storing them in .env, keep using process.env
+    //   // If you are letting the user "Connect" via UI, retrieve that config here.
       
-      const shopifyConfig = {
-        storeUrl: process.env.SHOPIFY_STORE_URL || '', 
-        accessToken: process.env.SHOPIFY_ACCESS_TOKEN || ''
-      };
+    //   const shopifyConfig = {
+    //     storeUrl: process.env.SHOPIFY_STORE_URL || '', 
+    //     accessToken: process.env.SHOPIFY_ACCESS_TOKEN || ''
+    //   };
 
-      // ⚠️ IMPORTANT: If you are using the "Connect" button in UI, you should pass 
-      // the credentials in the `context` or `intent.data`.
-      // For now, we assume if they aren't in .env, we check if the user provided them.
+    //   // ⚠️ IMPORTANT: If you are using the "Connect" button in UI, you should pass 
+    //   // the credentials in the `context` or `intent.data`.
+    //   // For now, we assume if they aren't in .env, we check if the user provided them.
 
-      if (!shopifyConfig.storeUrl || !shopifyConfig.accessToken) {
-        return { 
-          action: 'fetch_orders', 
-          message: '❌ No Shopify connection found. Please click "Connect Shopify" or add credentials to .env' 
-        };
-      }
+    //   if (!shopifyConfig.storeUrl || !shopifyConfig.accessToken) {
+    //     return { 
+    //       action: 'fetch_orders', 
+    //       message: '❌ No Shopify connection found. Please click "Connect Shopify" or add credentials to .env' 
+    //     };
+    //   }
 
-      // Extract filter (default to 'any')
-      const status = intent.parameters?.filter || 'any';
-      const limit = intent.parameters?.limit || 5;
+    //   // Extract filter (default to 'any')
+    //   const status = intent.parameters?.filter || 'any';
+    //   const limit = intent.parameters?.limit || 5;
 
-      // ... inside processor.ts
-      try {
-        // Now valid because getShopifyOrders returns Promise<ShopifyOrder[]>
-        const orders = await getShopifyOrders(shopifyConfig, limit, status);
+    //   // ... inside processor.ts
+    //   try {
+    //     // Now valid because getShopifyOrders returns Promise<ShopifyOrder[]>
+    //     const orders = await getShopifyOrders(shopifyConfig, limit, status);
         
-        if (!orders || orders.length === 0) {
-          return { action: 'fetch_orders', message: `No ${status !== 'any' ? status : ''} orders found.` };
-        }
+    //     if (!orders || orders.length === 0) {
+    //       return { action: 'fetch_orders', message: `No ${status !== 'any' ? status : ''} orders found.` };
+    //     }
 
-        // ✅ FIX: Explicitly type 'o' as ShopifyOrder to fix the 'any' error
-        const orderSummary = orders.map((o: ShopifyOrder) => 
-          `🛒 Order #${o.order_number} (${o.financial_status})\n   👤 ${o.customer?.first_name || 'Guest'} | 💰 ${o.total_price} ${o.currency || 'USD'}`
-        ).join('\n\n');
+    //     // ✅ FIX: Explicitly type 'o' as ShopifyOrder to fix the 'any' error
+    //     const orderSummary = orders.map((o: ShopifyOrder) => 
+    //       `🛒 Order #${o.order_number} (${o.financial_status})\n   👤 ${o.customer?.first_name || 'Guest'} | 💰 ${o.total_price} ${o.currency || 'USD'}`
+    //     ).join('\n\n');
 
-        return { 
-          action: 'fetch_orders', 
-          message: `✅ Found ${orders.length} orders:\n\n${orderSummary}`, 
-          data: orders 
-        };
+    //     return { 
+    //       action: 'fetch_orders', 
+    //       message: `✅ Found ${orders.length} orders:\n\n${orderSummary}`, 
+    //       data: orders 
+    //     };
 
-      } catch (error: any) {
-        return { action: 'fetch_orders', message: error.message };
-      }
-    }
+    //   } catch (error: any) {
+    //     return { action: 'fetch_orders', message: error.message };
+    //   }
+    // }
 
     /* ================= CREATE GOOGLE SHEET ================= */
     if (intent.action === 'create_sheet') {
