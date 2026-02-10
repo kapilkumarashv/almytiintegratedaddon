@@ -56,16 +56,17 @@ export function getAuthUrl(): string {
 }
 
 /* -------------------- EXCHANGE CODE FOR TOKENS -------------------- */
+/* -------------------- EXCHANGE CODE FOR TOKENS -------------------- */
 export async function getTokensFromCode(code: string): Promise<GoogleTokens> {
   const oauth2Client = getOAuth2Client();
   const { tokens } = await oauth2Client.getToken(code);
 
+  // ✅ Rectified: Only include properties that exist in your 'GoogleTokens' type
   const tokenObj: GoogleTokens = {
     access_token: tokens.access_token || '',
     refresh_token: tokens.refresh_token || '',
     expiry_date: tokens.expiry_date || 0,
-    scope: tokens.scope || SCOPES.join(' '),
-    token_type: tokens.token_type || 'Bearer',
+    // Removed 'scope' and 'token_type' as they don't exist in your interface
   };
 
   // Save tokens to file for future use
@@ -74,7 +75,6 @@ export async function getTokensFromCode(code: string): Promise<GoogleTokens> {
 
   return tokenObj;
 }
-
 /* -------------------- LOAD TOKENS -------------------- */
 export function loadTokens(): GoogleTokens | null {
   if (fs.existsSync(TOKEN_PATH)) {
